@@ -14,46 +14,58 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
+    * {
+        color: #e0e0e0;
+    }
+    
+    .stMainBlockContainer {
+        background-color: #0a0e27;
+    }
+    
     [data-testid="stMetric"] {
-        background-color: #f0f2f6;
+        background-color: #1a1f3a;
         padding: 20px;
         border-radius: 10px;
-        border-left: 4px solid #1f77b4;
+        border-left: 4px solid #667eea;
+    }
+    
+    [data-testid="stMetricValue"] {
+        color: #667eea;
     }
     
     .search-result {
-        background-color: white;
+        background-color: #1a1f3a;
         padding: 20px;
         border-radius: 8px;
         margin-bottom: 15px;
         border-left: 5px solid #FF6B35;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
     }
     
     .result-title {
         font-size: 18px;
         font-weight: bold;
-        color: #1f1f1f;
+        color: #ffffff;
         margin-bottom: 8px;
     }
     
     .result-url {
-        color: #0066cc;
+        color: #667eea;
         font-size: 12px;
         margin-bottom: 10px;
     }
     
     .result-description {
-        color: #555;
+        color: #b0b0b0;
         font-size: 14px;
         line-height: 1.5;
     }
     
     .filter-box {
-        background-color: #f9f9f9;
+        background-color: #1a1f3a;
         padding: 15px;
         border-radius: 8px;
-        border: 1px solid #e0e0e0;
+        border: 1px solid #2a2f4a;
     }
     
     .header-container {
@@ -77,6 +89,30 @@ st.markdown("""
         margin-top: 10px;
         opacity: 0.9;
     }
+    
+    .stSidebar {
+        background-color: #0f1428;
+    }
+    
+    .stTextInput > div > div > input {
+        background-color: #1a1f3a;
+        color: #e0e0e0;
+        border: 1px solid #2a2f4a;
+    }
+    
+    .stButton > button {
+        background-color: #667eea;
+        color: white;
+        border: none;
+    }
+    
+    .stButton > button:hover {
+        background-color: #764ba2;
+    }
+    
+    .stSelectbox, .stRadio, .stSlider {
+        color: #e0e0e0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,6 +120,46 @@ st.markdown("""
 @st.cache_data
 def get_sample_data():
     data = [
+        # YouTube İçerikleri
+        {
+            "title": "YouTube Video Editlemesi Rehberi",
+            "url": "https://youtube.com/watch?v=example1",
+            "description": "Adobe Premiere Pro ve DaVinci Resolve kullanarak profesyonel video editleme. Renk düzeltme, geçişler ve efektler.",
+            "category": "Video",
+            "date": "2024-01-20"
+        },
+        {
+            "title": "YouTube Kanalı Başlama 2024",
+            "url": "https://youtube.com/watch?v=example2",
+            "description": "Sıfırdan YouTube kanalı açma, SEO optimizasyonu, izleyici kazanma stratejileri.",
+            "category": "İçerik Oluşturucu",
+            "date": "2024-01-18"
+        },
+        {
+            "title": "YouTube Monetizasyon Stratejileri",
+            "url": "https://youtube.com/watch?v=example3",
+            "description": "YouTube Partner Program, sponsorlu içerik, afiliasyon pazarlaması ve gelir artırma yolları.",
+            "category": "İş",
+            "date": "2024-01-16"
+        },
+        
+        # Teknoloji
+        {
+            "title": "Apple iPhone 15 Pro İncelemesi",
+            "url": "https://techsite.com/iphone15",
+            "description": "iPhone 15 Pro'nun özellikleri, kamera performansı, işlemci hızı ve fiyat-performans değerlendirmesi.",
+            "category": "Teknoloji",
+            "date": "2024-01-19"
+        },
+        {
+            "title": "ChatGPT 4.0 Neler Suniyor?",
+            "url": "https://example.com/chatgpt4",
+            "description": "OpenAI'nin yeni ChatGPT 4.0 sürümü, AI uygulamaları ve işletmeler için kullanım alanları.",
+            "category": "Yapay Zeka",
+            "date": "2024-01-17"
+        },
+        
+        # Programlama
         {
             "title": "Python Programlama Rehberi",
             "url": "https://example.com/python-guide",
@@ -99,6 +175,22 @@ def get_sample_data():
             "date": "2024-01-10"
         },
         {
+            "title": "React 18 Yenilikler",
+            "url": "https://example.com/react18",
+            "description": "React 18'in yeni özellikleri: Concurrent Rendering, Automatic Batching ve Suspense.",
+            "category": "Yazılım",
+            "date": "2024-01-14"
+        },
+        {
+            "title": "TypeScript Dersleri İçin Başlangıç",
+            "url": "https://example.com/typescript",
+            "description": "TypeScript ile statik tipli JavaScript yazın. Interfaces, Generics ve Decorators öğrenin.",
+            "category": "Yazılım",
+            "date": "2024-01-12"
+        },
+        
+        # Veri Bilimi
+        {
             "title": "Veri Analizi Pandas ile",
             "url": "https://example.com/pandas",
             "description": "Pandas kütüphanesi ile veri analizi yapın. Veri temizleme ve dönüştürme teknikleri.",
@@ -106,18 +198,73 @@ def get_sample_data():
             "date": "2024-01-08"
         },
         {
-            "title": "Makine Öğrenmesi Başlangıcı",
+            "title": "Machine Learning Başlangıç Kursu",
             "url": "https://example.com/ml-intro",
             "description": "Scikit-learn ile makine öğrenmesi modellerini eğitin ve değerlendirin.",
             "category": "Yapay Zeka",
             "date": "2024-01-05"
         },
         {
-            "title": "API Tasarımı Best Practices",
-            "url": "https://example.com/api-design",
-            "description": "RESTful API'ları tasarlama ve geliştirme için en iyi uygulamalar.",
-            "category": "Yazılım",
-            "date": "2024-01-01"
+            "title": "Python ile Veri Görselleştirme",
+            "url": "https://example.com/matplotlib",
+            "description": "Matplotlib ve Seaborn kütüphaneleri ile harika grafikler ve şemalar oluşturun.",
+            "category": "Veri Bilimi",
+            "date": "2024-01-03"
+        },
+        
+        # İş ve Girişimcilik
+        {
+            "title": "Startup Kurmak için Rehber",
+            "url": "https://example.com/startup-guide",
+            "description": "İş planı yazma, finansman bulma, pazarlama stratejisi ve büyüme yolları.",
+            "category": "İş",
+            "date": "2024-01-11"
+        },
+        {
+            "title": "Dijital Pazarlama Stratejileri",
+            "url": "https://example.com/digital-marketing",
+            "description": "SEO, SEM, sosyal medya pazarlaması ve İçerik Pazarlaması stratejileri.",
+            "category": "İş",
+            "date": "2024-01-09"
+        },
+        {
+            "title": "Excel İle Veri Analizi",
+            "url": "https://example.com/excel-analysis",
+            "description": "Excel formülleri, PivotTable'lar ve gelişmiş analiz teknikleri.",
+            "category": "İş",
+            "date": "2024-01-06"
+        },
+        
+        # Sosyal Medya
+        {
+            "title": "TikTok Algoritması Nasıl Çalışıyor?",
+            "url": "https://example.com/tiktok-algorithm",
+            "description": "TikTok'un önerme algoritması, viral olma yolları ve içerik stratejileri.",
+            "category": "Sosyal Medya",
+            "date": "2024-01-13"
+        },
+        {
+            "title": "Instagram İçerik Planlama",
+            "url": "https://example.com/instagram-plan",
+            "description": "Instagram stratejisi, Reels, Stories ve Hashag kullanımı.",
+            "category": "Sosyal Medya",
+            "date": "2024-01-07"
+        },
+        {
+            "title": "LinkedIn Profesyonel Profil Oluşturma",
+            "url": "https://example.com/linkedin-profile",
+            "description": "LinkedIn profilinizi optimize edin, bağlantı kurun ve iş bulun.",
+            "category": "Sosyal Medya",
+            "date": "2024-01-04"
+        },
+        
+        # Eğitim
+        {
+            "title": "İngilizce Öğrenme İpuçları",
+            "url": "https://example.com/english-tips",
+            "description": "Konuşma, yazı, dinleme ve okuma becerilerini geliştirme yöntemleri.",
+            "category": "Eğitim",
+            "date": "2024-01-02"
         },
         {
             "title": "Streamlit ile Hızlı Uygulamalar",
@@ -157,6 +304,16 @@ st.sidebar.title("⚙️ Filtreler")
 data = get_sample_data()
 categories = sorted(list(set([item["category"] for item in data])))
 
+# İstatistikler göster (sidebar üstü)
+st.sidebar.write("---")
+st.sidebar.write("**📊 Veritabanı İstatistikleri**")
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    st.metric("Toplam Sonuç", len(data))
+with col2:
+    st.metric("Kategoriler", len(categories))
+st.sidebar.write("---")
+
 # Kategori filtresi
 selected_category = st.sidebar.selectbox(
     "Kategori",
@@ -179,17 +336,7 @@ sort_option = st.sidebar.radio(
     index=1
 )
 
-st.sidebar.divider()
 
-# İstatistikler
-st.sidebar.write("**İstatistikler**")
-col1, col2, col3 = st.sidebar.columns(3)
-with col1:
-    st.metric("Toplam Sonuç", len(data))
-with col2:
-    st.metric("Kategoriler", len(categories))
-with col3:
-    st.metric("Sürüm", "1.0")
 
 # Arama ve filtreleme işlevi
 def filter_data(data, query, category, days):
@@ -258,18 +405,20 @@ else:
     st.divider()
     st.write("**🔥 Popüler Konular**")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     topics = [
-        {"emoji": "🐍", "name": "Python", "count": "12 sonuç"},
-        {"emoji": "🌐", "name": "Web Dev", "count": "8 sonuç"},
-        {"emoji": "📊", "name": "Veri Bilimi", "count": "6 sonuç"}
+        {"emoji": "📺", "name": "YouTube"},
+        {"emoji": "🐍", "name": "Python"},
+        {"emoji": "🤖", "name": "AI"},
+        {"emoji": "📱", "name": "TikTok"},
+        {"emoji": "💼", "name": "İş"}
     ]
     
-    for col, topic in zip([col1, col2, col3], topics):
+    for col, topic in zip([col1, col2, col3, col4, col5], topics):
         with col:
-            if st.button(f"{topic['emoji']} {topic['name']}", use_container_width=True):
-                st.session_state.search_query = topic['name']
+            if st.button(f"{topic['emoji']}\n{topic['name']}", use_container_width=True):
+                search_query = topic['name']
                 st.rerun()
 
 # Alt bilgi
