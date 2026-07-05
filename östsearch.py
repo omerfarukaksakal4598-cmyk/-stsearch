@@ -1,198 +1,281 @@
 import streamlit as st
-import sqlite3
-from googlesearch import search
+import pandas as pd
+from datetime import datetime
+import json
 
-# 1. VERİBATANI AYARLARI (Kısayollar için)
-conn = sqlite3.connect("ostsearch_browser_v2.db", check_same_thread=False)
-c = conn.cursor()
-c.execute("""
-CREATE TABLE IF NOT EXISTS kisayollar (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ad TEXT,
-    url TEXT,
-    ikon_renk TEXT
+# Sayfa yapılandırması
+st.set_page_config(
+    page_title="östsearch",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
-""")
-conn.commit()
 
-# Veritabanı boşsa varsayılan kısayolları yükle
-c.execute("SELECT COUNT(*) FROM kisayollar")
-if c.fetchone()[0] == 0:
-    varsayilanlar = [
-        ("Youtube", "https://youtube.com", "#ef4444"),
-        ("Territorial.io", "https://territorial.io", "#22c55e"),
-        ("streamlit", "https://streamlit.io", "#ff4b4b"),
-        ("ömergpt", "https://omergpt.streamlit.app", "#a855f7"),
-        ("market", "https://google.com", "#3b82f6"),
-        ("Ömerflix", "https://omerflix.streamlit.app", "#e50914"),
-        ("östmail", "https://ostmail.streamlit.app", "#0284c7")
-    ]
-    c.executemany("INSERT INTO kisayollar (ad, url, ikon_renk) VALUES (?, ?, ?)", varsayilanlar)
-    conn.commit()
-
-# Sayfa Ayarları
-st.set_page_config(page_title="Östsearch - Yeni Sekme", layout="wide", page_icon="🔍")
-
-# URL'den gelen güncel arama parametresini alalım
-aktif_sorgu = st.query_params.get("q", "")
-
-# 2. GELİŞMİŞ GÖRSEL TASARIM (CSS)
+# Custom CSS
 st.markdown("""
-    <style>
-    /* Arka Plan Tonu */
-    .stApp { background-color: #3d293a; color: white; }
+<style>
+    [data-testid="stMetric"] {
+        background-color: #f0f2f6;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #1f77b4;
+    }
     
-    /* Sekme Tasarımları */
-    .chrome-header { background-color: #2b1a27; padding: 10px 10px 5px 10px; border-radius: 8px 8px 0 0; }
-    .chrome-tabs { display: flex; gap: 5px; margin-bottom: 5px; }
-    .chrome-tab { background-color: #2b1a27; padding: 8px 20px; border-radius: 8px 8px 0 0; font-size: 13px; color: #cbd5e1; text-decoration: none; }
-    .chrome-tab.active { background-color: #3d293a; font-weight: bold; color: white; }
-    .chrome-tab:hover:not(.active) { background-color: #4d374d; color: white; }
+    .search-result {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        border-left: 5px solid #FF6B35;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
     
-    /* Yer İşaretleri */
-    .bookmarks-bar { display: flex; gap: 18px; font-size: 12px; color: #cbd5e1; padding: 8px 15px; border-bottom: 1px solid #5c435c; margin-bottom: 30px; background-color: #2b1a27; border-radius: 0 0 8px 8px; }
+    .result-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #1f1f1f;
+        margin-bottom: 8px;
+    }
     
-    /* Büyük Logo */
-    .main-logo { font-size: 75px; font-weight: bold; text-align: center; margin-top: 50px; margin-bottom: 30px; font-family: 'Product Sans', sans-serif; }
+    .result-url {
+        color: #0066cc;
+        font-size: 12px;
+        margin-bottom: 10px;
+    }
     
-    /* Kısayol Kartları */
-    .shortcut-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 25px; margin-top: 35px; }
-    .shortcut-card { display: flex; flex-direction: column; align-items: center; text-align: center; width: 85px; text-decoration: none; color: white; }
-    .shortcut-icon { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; color: white; margin-bottom: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: 0.2s; }
-    .shortcut-icon:hover { transform: scale(1.1); }
-    .shortcut-text { font-size: 12px; color: #f1f5f9; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; width: 100%; }
+    .result-description {
+        color: #555;
+        font-size: 14px;
+        line-height: 1.5;
+    }
     
-    /* Sonuç Kutuları */
-    .result-box { padding: 18px; margin-bottom: 15px; background-color: #2b1a27; border-radius: 10px; border-left: 5px solid #c084fc; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .result-title { font-size: 19px; font-weight: bold; color: #c084fc; text-decoration: none; }
-    .result-title:hover { text-decoration: underline; }
-    .result-url { font-size: 13px; color: #4ade80; margin-bottom: 6px; }
-    .result-desc { font-size: 14px; color: #e2e8f0; line-height: 1.5; }
+    .filter-box {
+        background-color: #f9f9f9;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+    }
     
-    /* Streamlit Input Alanlarını Tarayıcı Çubuğuna Benzetme */
-    .address-col div[data-testid="stTextInput"] input { background-color: #3d293a !important; color: #ffffff !important; border: 1px solid #5c435c !important; border-radius: 20px !important; padding: 4px 15px !important; }
-    .center-search div[data-testid="stTextInput"] input { background-color: #ffffff !important; color: #000000 !important; border-radius: 30px !important; padding: 12px 25px !important; font-size: 16px !important; }
-    </style>
+    .header-container {
+        text-align: center;
+        padding: 30px 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        color: white;
+        margin-bottom: 30px;
+    }
+    
+    .header-title {
+        font-size: 48px;
+        font-weight: bold;
+        margin: 0;
+        letter-spacing: -1px;
+    }
+    
+    .header-subtitle {
+        font-size: 16px;
+        margin-top: 10px;
+        opacity: 0.9;
+    }
+</style>
 """, unsafe_allow_html=True)
 
-# 3. TARAYICI ÜST BARU (İstediğin Düzenlemeler Yapıldı)
-st.markdown('<div class="chrome-header">', unsafe_allow_html=True)
-tabs_html = """
-<div class="chrome-tabs">
-    <a href="#" class="chrome-tab active">🔍 Östsearch - Streamlit</a>
-    <a href="https://ostsearch.streamlit.app/" target="_self" class="chrome-tab">➕ Yeni Sekme</a>
+# Örnek veri seti
+@st.cache_data
+def get_sample_data():
+    data = [
+        {
+            "title": "Python Programlama Rehberi",
+            "url": "https://example.com/python-guide",
+            "description": "Python programlamasının temellerini öğrenin. Değişkenler, döngüler, fonksiyonlar ve daha fazlası.",
+            "category": "Eğitim",
+            "date": "2024-01-15"
+        },
+        {
+            "title": "Web Geliştirme ile Django",
+            "url": "https://example.com/django",
+            "description": "Django framework kullanarak modern web uygulamaları geliştirin. REST API'lar oluşturun.",
+            "category": "Yazılım",
+            "date": "2024-01-10"
+        },
+        {
+            "title": "Veri Analizi Pandas ile",
+            "url": "https://example.com/pandas",
+            "description": "Pandas kütüphanesi ile veri analizi yapın. Veri temizleme ve dönüştürme teknikleri.",
+            "category": "Veri Bilimi",
+            "date": "2024-01-08"
+        },
+        {
+            "title": "Makine Öğrenmesi Başlangıcı",
+            "url": "https://example.com/ml-intro",
+            "description": "Scikit-learn ile makine öğrenmesi modellerini eğitin ve değerlendirin.",
+            "category": "Yapay Zeka",
+            "date": "2024-01-05"
+        },
+        {
+            "title": "API Tasarımı Best Practices",
+            "url": "https://example.com/api-design",
+            "description": "RESTful API'ları tasarlama ve geliştirme için en iyi uygulamalar.",
+            "category": "Yazılım",
+            "date": "2024-01-01"
+        },
+        {
+            "title": "Streamlit ile Hızlı Uygulamalar",
+            "url": "https://example.com/streamlit",
+            "description": "Python ile etkileşimli web uygulamaları oluşturun. Streamlit framework'ünü öğrenin.",
+            "category": "Yazılım",
+            "date": "2023-12-28"
+        }
+    ]
+    return data
+
+# Header
+st.markdown("""
+<div class="header-container">
+    <h1 class="header-title">🔍 östsearch</h1>
+    <p class="header-subtitle">Akıllı Arama Motoru</p>
 </div>
-"""
-st.markdown(tabs_html, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# Adres Çubuğunu Gerçek Bir Input Yapıyoruz
-cols_nav = st.columns([1, 8])
-with cols_nav[0]:
-    st.markdown("<div style='margin-top: 5px; color: #cbd5e1;'>&nbsp;&nbsp;← &nbsp; → &nbsp; ↻</div>", unsafe_allow_html=True)
-
-with cols_nav[1]:
-    st.markdown('<div class="address-col">', unsafe_allow_html=True)
-    adres_girdisi = st.text_input(
-        "Address Bar", 
-        value=aktif_sorgu if aktif_sorgu else "https://ostsearch.streamlit.app/", 
-        key="address_bar_input", 
+# Ana arama kutusu
+col1, col2 = st.columns([4, 1])
+with col1:
+    search_query = st.text_input(
+        "Ara",
+        placeholder="Aranacak kelime veya konuyu girin...",
         label_visibility="collapsed"
     )
-    st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+with col2:
+    search_button = st.button("🔍 Ara", use_container_width=True)
 
-# Yer İşaretleri Çubuğu
-st.markdown("""
-<div class="bookmarks-bar">
-    <div>🛠️ Uygulamalar</div><div>🌐 Chrome Web Mağazası</div><div>💬 WhatsApp Web</div><div>🎬 Netflix Türkiye</div><div>🏫 EBA, EBATV</div><div>🚀 ÖmerGPT Ultra</div>
-</div>
-""", unsafe_allow_html=True)
+st.divider()
 
-# Eğer adres çubuğuna link değil de arama kelimesi yazılıp Enter'a basıldıysa parametreyi güncelle
-if adres_girdisi and adres_girdisi != "https://ostsearch.streamlit.app/" and adres_girdisi != aktif_sorgu:
-    # Kullanıcı doğrudan temiz kelime yazdıysa veya URL'yi değiştirdiyse tetiklenir
-    st.query_params["q"] = adres_girdisi
-    st.rerun()
+# Kenar çubuğu - Filtreler
+st.sidebar.title("⚙️ Filtreler")
 
-# 4. DURUM KONTROLÜ (Arama Yapıldı mı?)
-if aktif_sorgu and aktif_sorgu != "https://ostsearch.streamlit.app/":
-    # --- SADECE ARAMA SONUÇLARI EKRANI ---
-    st.markdown(f"### 🔎 **'{aktif_sorgu}'** için arama sonuçları:")
-    st.write("---")
+# Veri yükle
+data = get_sample_data()
+categories = sorted(list(set([item["category"] for item in data])))
+
+# Kategori filtresi
+selected_category = st.sidebar.selectbox(
+    "Kategori",
+    ["Tümü"] + categories,
+    index=0
+)
+
+# Tarih aralığı filtresi
+st.sidebar.write("**Tarih Aralığı**")
+date_filter = st.sidebar.slider(
+    "Son kaç gün içinde",
+    0, 60, 60,
+    label_visibility="collapsed"
+)
+
+# Sıralama seçeneği
+sort_option = st.sidebar.radio(
+    "Sırala",
+    ["En Yeni", "İlişkili", "En Popüler"],
+    index=1
+)
+
+st.sidebar.divider()
+
+# İstatistikler
+st.sidebar.write("**İstatistikler**")
+col1, col2, col3 = st.sidebar.columns(3)
+with col1:
+    st.metric("Toplam Sonuç", len(data))
+with col2:
+    st.metric("Kategoriler", len(categories))
+with col3:
+    st.metric("Sürüm", "1.0")
+
+# Arama ve filtreleme işlevi
+def filter_data(data, query, category, days):
+    filtered = data
     
-    try:
-        sonuclar = search(aktif_sorgu, num_results=10, lang="tr", advanced=True)
-        for sonuc in sonuclar:
+    # Kategori filtresi
+    if category != "Tümü":
+        filtered = [item for item in filtered if item["category"] == category]
+    
+    # Tarih filtresi
+    if days < 60:
+        cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=days)
+        filtered = [
+            item for item in filtered 
+            if pd.Timestamp(item["date"]) >= cutoff_date
+        ]
+    
+    # Arama sorgusu filtresi
+    if query:
+        query_lower = query.lower()
+        filtered = [
+            item for item in filtered
+            if query_lower in item["title"].lower() or 
+               query_lower in item["description"].lower()
+        ]
+    
+    return filtered
+
+# Sonuçları göster
+if search_button or search_query:
+    results = filter_data(data, search_query, selected_category, date_filter)
+    
+    # Başlık ve sayı
+    st.subheader(f"📊 Sonuçlar: {len(results)} bulundu")
+    
+    if results:
+        for result in results:
             st.markdown(f"""
-            <div class='result-box'>
-                <div class='result-url'>{sonuc.url}</div>
-                <a href="{sonuc.url}" target="_blank" class='result-title'>{sonuc.title}</a>
-                <div class='result-desc'>{sonuc.description}</div>
+            <div class="search-result">
+                <div class="result-title">{result['title']}</div>
+                <div class="result-url">🔗 {result['url']}</div>
+                <div class="result-description">{result['description']}</div>
+                <div style="margin-top: 10px; font-size: 12px; color: #888;">
+                    📁 {result['category']} · 📅 {result['date']}
+                </div>
             </div>
             """, unsafe_allow_html=True)
-    except Exception as e:
-        st.error("Google sunucularından sonuçlar alınırken bir sorun oluştu.")
+    else:
+        st.info("😔 Arama kriterlerine uygun sonuç bulunamadı. Lütfen farklı arama terimlerini deneyin.")
 
 else:
-    # --- ANA SAYFA (YENİ SEKME) EKRANI ---
-    st.markdown("<div class='main-logo'>Östsearch</div>", unsafe_allow_html=True)
+    # Başlık sayfası
+    st.markdown("""
+    <div style="text-align: center; padding: 50px 20px;">
+        <h2 style="color: #667eea;">Hoş Geldiniz!</h2>
+        <p style="font-size: 16px; color: #666;">
+            Yukarıdaki arama kutusunu kullanarak istediğiniz konuyu arayın.
+        </p>
+        <p style="font-size: 14px; color: #999;">
+            Filtreler bölümünden kategori ve tarih aralığını belirtebilirsiniz.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Merkezdeki Büyük Arama Çubuğu
-    st.markdown('<div class="center-search">', unsafe_allow_html=True)
-    merkez_girdisi = st.text_input("Search", placeholder="Östsearch'te arayın veya URL yazın...", key="center_search_input", label_visibility="collapsed")
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Popüler konular
+    st.divider()
+    st.write("**🔥 Popüler Konular**")
     
-    if merkez_girdisi:
-        st.query_params["q"] = merkez_girdisi
-        st.rerun()
-        
-    # Hızlı Erişim Kısayolları
-    st.markdown("<div class='shortcut-grid'>", unsafe_allow_html=True)
-    c.execute("SELECT id, ad, url, ikon_renk FROM kisayollar")
-    akis_kisayollar = c.fetchall()
+    col1, col2, col3 = st.columns(3)
     
-    cols = st.columns(len(akis_kisayollar) + 1 if len(akis_kisayollar) < 8 else 8)
+    topics = [
+        {"emoji": "🐍", "name": "Python", "count": "12 sonuç"},
+        {"emoji": "🌐", "name": "Web Dev", "count": "8 sonuç"},
+        {"emoji": "📊", "name": "Veri Bilimi", "count": "6 sonuç"}
+    ]
     
-    for idx, (k_id, ad, url, renk) in enumerate(akis_kisayollar):
-        with cols[idx % 8]:
-            ilk_harf = ad[0].upper()
-            st.markdown(f"""
-                <a href="{url}" target="_blank" class="shortcut-card">
-                    <div class="shortcut-icon" style="background-color: {renk};">{ilk_harf}</div>
-                    <div class="shortcut-text">{ad}</div>
-                </a>
-            """, unsafe_allow_html=True)
-            
-    # Sabit Kısayol Ekleme Görseli
-    with cols[len(akis_kisayollar) % 8]:
-        st.markdown("""
-            <div class="shortcut-card" style="opacity: 0.7;">
-                <div class="shortcut-icon" style="background-color: #5c435c; border: 2px dashed #cbd5e1;">+</div>
-                <div class="shortcut-text">Kısayol Ekle</div>
-            </div>
-        """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Özelleştirme Paneli (Sayfa düzenini bozmamak için en altta gizlenebilir kutuda)
-    st.write("<br><br>", unsafe_allow_html=True)
-    with st.expander("⚙️ Kısayolları Özelleştir (Ekle / Sil)"):
-        tab1, tab2 = st.tabs(["➕ Ekle", "🗑️ Sil"])
-        with tab1:
-            y_ad = st.text_input("Site Adı")
-            y_url = st.text_input("Site URL")
-            y_renk = st.color_picker("İkon Rengi", "#3b82f6")
-            if st.button("Kaydet"):
-                if y_ad and y_url:
-                    if not y_url.startswith(("http://", "https://")):
-                        y_url = "https://" + y_url
-                    c.execute("INSERT INTO kisayollar (ad, url, ikon_renk) VALUES (?, ?, ?)", (y_ad, y_url, y_renk))
-                    conn.commit()
-                    st.rerun()
-        with tab2:
-            c.execute("SELECT ad FROM kisayollar")
-            mevcutlar = [row[0] for row in c.fetchall()]
-            silinecek = st.selectbox("Silinecek Kısayol", mevcutlar)
-            if st.button("Kaldır", type="primary"):
-                c.execute("DELETE FROM kisayollar WHERE ad=?", (silinecek,))
-                conn.commit()
+    for col, topic in zip([col1, col2, col3], topics):
+        with col:
+            if st.button(f"{topic['emoji']} {topic['name']}", use_container_width=True):
+                st.session_state.search_query = topic['name']
                 st.rerun()
+
+# Alt bilgi
+st.divider()
+st.markdown("""
+<div style="text-align: center; color: #999; font-size: 12px; padding: 20px;">
+    <p>östsearch © 2024 | Akıllı Arama Teknolojisi</p>
+</div>
+""", unsafe_allow_html=True)
